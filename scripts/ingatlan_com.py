@@ -123,7 +123,7 @@ def get_scalar_result(conn, sql):
     cursor.execute(sql)
     return cursor.fetchone()[0]
 
-def sendemail(sender_address,sender_pass,receiver_address,subject,mail_content,excelattachment):
+def sendemail(sender_address,sender_pass,receiver_address,bcc_address,subject,mail_content,excelattachment):
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
@@ -149,7 +149,7 @@ def sendemail(sender_address,sender_pass,receiver_address,subject,mail_content,e
     session.starttls() #enable security
     session.login(sender_address, sender_pass) #login with mail_id and password
     text = message.as_string()
-    session.sendmail(sender_address, receiver_address, text)
+    session.sendmail(sender_address,receiver_address.split(",")+bcc_address.split(","), text)
     session.quit()
     print('Mail Sent')
 
@@ -316,11 +316,13 @@ def main(arguments):
            
     import configparser
     config=configparser.ConfigParser()
-    paramfile='params.ini'
+    paramfile='/var/opt/realestimator/scripts/params.ini'
     config.read(paramfile)
+    print(config.sections())
     sender_address = config[environment]['sender_address']
     sender_pass = config[environment]['sender_pass']
     receiver_address = config[environment]['receiver_address']
+    bcc_address = config[environment]['bcc_address']
     subject=f'ingatlan.com szűrési eredmények {datetime.datetime.today().strftime("%Y-%m-%d %H óra")}'
 
     if environment=='PROD':
@@ -379,7 +381,7 @@ def main(arguments):
            Szia Miki!,
            Mellékeltem a legfrissebb szűrés eredményét.
            Köszönöm!'''
-    sendemail(sender_address,sender_pass,receiver_address,subject,mail_content,filestring)
+    sendemail(sender_address,sender_pass,receiver_address,bcc_address,subject,mail_content,filestring)
     print('attachment; filename="'+ os.path.basename(filestring)+'"')
     print(f'Last valid HID found: {lastHID}')
     logging.info(f'Last valid HID found: {lastHID}')
