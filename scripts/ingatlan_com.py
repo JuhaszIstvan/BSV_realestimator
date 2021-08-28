@@ -27,8 +27,14 @@ sql_create_temp = """ CREATE TABLE IF NOT EXISTS TEMP (
                                     httpcode integer,
                                     address text,
                                     alapterulet integer,
+                                    irany text,
+                                    country text,
+                                    city text,
                                     kerulet text,
                                     leiras text,
+                                    street text,
+                                    owner text,
+                                    kategoria text,
                                     alkategoria text,
                                     hirdeto text,
                                     iroda text,
@@ -51,17 +57,15 @@ httpcode,
 address,
 alapterulet,
 kerulet,
-leiras,
 alkategoria,
 hirdeto,
 iroda,
 ar,
 First_recorded,
-belmagassag,
 price,
 Forward,
-end_date,
-officeid) 
+end_date
+) 
 SELECT 
     ID,
     hirdetesurl,
@@ -69,17 +73,14 @@ SELECT
     address,
     alapterulet,
     kerulet,
-    leiras,
     alkategoria,
     hirdeto,
     iroda,
     ar,
     First_recorded,
-    belmagassag,
     price,
     Forward,
-    end_date,
-    officeid 
+    end_date
 from TEMP
 WHERE NOT EXISTS (SELECT ID FROM hirdetesek WHERE hirdetesek.ID = TEMP.ID) and TEMP.httpcode!=404;  """
 
@@ -155,19 +156,34 @@ def sendemail(sender_address,sender_pass,receiver_address,bcc_address,subject,ma
 
 def ClearBatch(rsl):
     import pandas as pd
-    rsl['millio'] =1
-    rsl['arcleared']=rsl.ar.str.replace('.Ft', '', regex=True)
-    rsl.loc[rsl['arcleared'].str.contains("millió", na=False), 'millio'] = 1000000
-    rsl.loc[rsl['arcleared'].str.contains("milliárd", na=False), 'millio'] = 1000000000
-    rsl['arcleared']=rsl.arcleared.str.replace('.millió.*', '', regex=True).str.replace('.milliárd.*', '', regex=True).str.replace(',', '.', regex=True).str.replace('ár nélkül','').str.replace(' ', '', regex=True)
-    try:
-        rsl.loc[pd.notna(rsl.arcleared), 'price'] = rsl['arcleared'].astype(float)*rsl['millio']
-    except:
-        rsl.loc[pd.notna(rsl.arcleared), 'price']= None
-        logging.error(f"Failed to convert record to float")
-    rsl=rsl.drop(['millio','arcleared'], axis=1)
+    import traceback
+#    rsl['millio'] =1
+#    try:
+#        rsl['arcleared']=rsl.ar.str.replace('.Ft', '', regex=True)
+#    except:
+#        logging.error(f"Failed to remove FT")
+#    try:
+#        rsl.loc[rsl['arcleared'].str.contains("millió", na=False), 'millio'] = 1000000
+#    except:
+#        logging.error(f"Failed to numerise millio")
+#    try:
+#        rsl.loc[rsl['arcleared'].str.contains("milliárd", na=False), 'millio'] = 1000000000
+#    except:
+#        logging.error(f"Failed to numerise milliard")
+#    try:
+#    rsl['arcleared']=rsl.arcleared.str.replace('.millió.*', '', regex=True).str.replace('.milliárd.*', '', regex=True).str.replace(',', '.', regex=True).str.replace('ár nélkül','').str.replace(' ', '', regex=True)
+#    except:
+#        logging.error(f"Failed to replace millio, milliard")
+#    
+#    rsl.loc[pd.notna(rsl.arcleared), 'price']= None
+#    try:
+#        rsl.loc[pd.notna(rsl.arcleared), 'price'] = rsl['arcleared'].astype(float)*rsl['millio']
+#    except:
+#        logging.error(f"Failed to convert record to float")
+#    rsl=rsl.drop(['millio','arcleared'], axis=1)
     rsl['Forward'] =False
-    rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['alkategoria'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['alkategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True))  , 'Forward']=True
+    #rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['irany'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['kategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True))  , 'Forward']=True
+    rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['irany'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['kategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True)), 'Forward']=True
     return rsl
 
 def collectads(starter, batchsize):
@@ -180,7 +196,7 @@ def collectads(starter, batchsize):
     import numpy as np
     import requests
     from tqdm import tqdm
-
+    import traceback
     resultlist = pd.DataFrame()
     dead=0
     maxdead=25
@@ -218,15 +234,40 @@ def collectads(starter, batchsize):
                 logging.info("Too many consecutive broken links. Stopping.")
                 break
             if x.status_code==200:
+                datasheet=None
                 hWebPageText=x.content.decode()
+                wb=hWebPageText.replace("\n","")
+                m=None
+                m=re.search(r"(?:window\['dataLayer'\]=\[)({[^}]*})", wb)
+                if m is not None:
+                    datasheet=m.group(1).strip()
+ #                   print(datasheet)
+ #                   print(type(datasheet))
+                    if datasheet is not None:
+                        import json
+                        js=json.loads(datasheet)
+                        hData['irany']=js.get('listingType', None)
+                        hData['hirdeto']=js.get('referentName', None)
+                        hData['kategoria']=js.get('propertyType', None) 
+                        hData['alkategoria']=js.get('propertySubType', None) 
+                        hData['alapterulet']=js.get('area', None) 
+                        hData['country']=js.get('county', None) 
+                        hData['city']=js.get('city', None) 
+                        hData['street']=js.get('street', None) 
+                        hData['ar']=js.get('price', None) 
+                        hData['owner']=js.get('owner', None) 
+                        hData['iroda']=js.get('officename', None) 
+
                 hData['First_recorded']=datetime.date.today().strftime("%Y-%m-%d")
-                m = re.search('<div class="photo-address">(.*?) </div>', hWebPageText)
+                m= re.search(r'<h1 class="address"[^>]*>(.*?)</h1>', wb)
+                #m = re.search(r'<h1 class="address".*>?(.*?)</h1>', hWebPageText)
                 if m is not None:
                     hData['address'] = m.group(1).strip()
-                m = re.search('<span class="parameter-value">(.*?)m²</span>', hWebPageText)
-                if m is not None:
-                    hData['alapterulet'] = int(m.group(1).strip().replace(" ", ""))
-                m = re.search('<span itemprop="title">(.*?)</span>', hWebPageText)
+  #                  print(m.group(1).strip())
+ #               m = re.search('<span class="parameter-value">(.*?)m²</span>', hWebPageText)
+#                if m is not None:
+#                    hData['alapterulet'] = int(m.group(1).strip().replace(" ", ""))
+                m = re.search(r'(.*?),(.*)', hData["address"])
                 if m is not None:
                     hData['kerulet'] = m.group(1).strip()
                 m = re.search('<div class="long-description">(.*?)</div>', hWebPageText)
@@ -237,23 +278,24 @@ def collectads(starter, batchsize):
                 if m is not None:
                     hData['belmagassag'] = m.group(1).strip()
                 m = re.search('<div class="listing-subtype">(.*?)</div>', hWebPageText)
-                if m is not None:
-                    hData['alkategoria'] = m.group(1).strip()
-                m = re.search('<div class="call-the-advertiser">(.*?)</div>', hWebPageText)         
-                if m is not None:
-                    hData['hirdeto'] = m.group(1).strip()
+ #               if m is not None:
+ #                   hData['alkategoria'] = m.group(1).strip()
+ #               m = re.search('<div class="call-the-advertiser">(.*?)</div>', hWebPageText)         
+ #               if m is not None:
+ #                   hData['hirdeto'] = m.group(1).strip()
                 m= None
-                m = re.search('<div class="agent-name">(.*?)</div>', hWebPageText)
+                m=re.search(r'div class="officeName"[^>]*?>(.*?)</div>', wb)
+                #m = re.search(r'(?:<div class="officeName".*>)(.*)</div>', wb)
                 if m is not None:
                     hData['iroda'] = m.group(1).strip()
-                m= None
-                m = re.search('<div class="parameter parameter-price">.*<span class="parameter-value">(.*?)</span>', hWebPageText)
-                if m is not None:
-                    hData['ar'] = m.group(1).strip()
-                m= None
-                m = re.search('officeId:(.*?),*.}', hWebPageText)
-                if m is not None:
-                    hData['officeid'] = m.group(1).strip()
+#                m= None
+#                m = re.search('<div class="parameter parameter-price">.*<span class="parameter-value">(.*?)</span>', hWebPageText)
+#                if m is not None:
+#                    hData['ar'] = m.group(1).strip()
+#                m= None
+#                m = re.search('officeId:(.*?),*.}', hWebPageText)
+#                if m is not None:
+ #                   hData['officeid'] = m.group(1).strip()
         except:
             logging.error(f'failed to collect: {hData["ID"]}')
         Df=pd.DataFrame([hData])
@@ -275,6 +317,7 @@ def main(arguments):
     import datetime
     import os
     import sqlite3
+    import traceback 
     from sqlite3 import Error
     environment=''
     batchsize=4000
@@ -324,7 +367,7 @@ def main(arguments):
     receiver_address = config[environment]['receiver_address']
     bcc_address = config[environment]['bcc_address']
     subject=f'ingatlan.com szűrési eredmények {datetime.datetime.today().strftime("%Y-%m-%d %H óra")}'
-
+    import traceback
     if environment=='PROD':
         outputfld=os.path.join('/var','opt','realestimator','output_prod')
         logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',filename=os.path.join(outputfld,'ingatlan_com.log'), level=logging.INFO,datefmt='%Y-%m-%d %H:%M:%S')
@@ -355,12 +398,19 @@ def main(arguments):
     try:
         run_command(conn,"DROP TABLE TEMP;")
         conn.commit()
+    except:
+        logging.error('Failed to DROP the TEMP table')
+    try:
         create_table(conn,sql_create_temp)
         conn.commit()
+    except:
+        logging.error('failed to recreate the temp table')
+    try:
         resultlist.to_sql('TEMP', conn, if_exists='append')
         conn.commit() 
-    except:
+    except Exception:
         logging.error(f'Failed to upload onto the staging DB')
+        logging.error(traceback.format_exc())
         pass
     try:
         run_command(conn,addnewsql)
@@ -376,6 +426,7 @@ def main(arguments):
     resultlist.to_excel(filestring, engine='xlsxwriter',index=True)
     filestring=os.path.join(outputfld,"ingatlan-dot-com_" + datetime.datetime.today().strftime("%Y-%m-%d-%H")  + '_' + str(startat)+ '-' + str(lastHID)+ '.xlsx')
     MIKINEK=resultlist.loc[resultlist.Forward==True]
+    print(MIKINEK) 
     MIKINEK.to_excel(filestring, engine='xlsxwriter',index=True)
     mail_content='''
            Szia Miki!,
