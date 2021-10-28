@@ -183,7 +183,7 @@ def ClearBatch(rsl):
 #    rsl=rsl.drop(['millio','arcleared'], axis=1)
     rsl['Forward'] =False
     #rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['irany'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['kategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True))  , 'Forward']=True
-    rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['irany'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['kategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True)), 'Forward']=True
+    rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|.*Érd.*|.*Törökbálint.*|.*Biatorbágy.*|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['irany'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['kategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True)), 'Forward']=True
     return rsl
 
 def collectads(starter, batchsize):
