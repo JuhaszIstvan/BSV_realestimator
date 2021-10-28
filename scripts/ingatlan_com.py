@@ -324,20 +324,21 @@ def main(arguments):
     try:
         opts, args = getopt.getopt(arguments[1:],"hb:e:s:",["env=","help=","start=","bsize="])
     except getopt.GetoptError:
-        print('''error ingatlan_com.py 
-                    -e <environment UAT|PROD|DEV>
-                    -h for help
-                    -b --bsize to set how far should the script count upwards
-                    -s to set the first to check''')
+        print(f'''Unrecognised switch! 
+USAGE:          ingatlan_com.py 
+                    -e, --env <environment UAT|PROD|DEV>
+                    -s, --start to set the first posting to check, 0 will check the latest in the db
+                    -b. --bsize to set how far should the script count upwards Default is {batchsize}
+                    -h for help''')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print(f'''USAGE:
-                 ingatlan_com.py 
-                    -e <environment UAT|PROD|DEV>
-                    -h for help
-                    -b --bsize to set how far should the script count. Default is {batchsize}
-                    -s to set the first to check''')
+            print(f'''
+USAGE:          ingatlan_com.py 
+                    -e, --env <environment UAT|PROD|DEV>
+                    -s, --start to set the first posting to check, 0 will check the latest in the db
+                    -b, --bsize to set how far should the script count upwards Default is {batchsize}
+                    -h for help''')
             sys.exit()
         elif opt in ("-e", "--env"):
             environment = arg
@@ -359,7 +360,7 @@ def main(arguments):
            
     import configparser
     config=configparser.ConfigParser()
-    paramfile='/var/opt/realestimator/scripts/params.ini'
+    paramfile=os.path.join(os.path.dirname(os.path.realpath(__file__)),'params.ini')
     config.read(paramfile)
     print(config.sections())
     sender_address = config[environment]['sender_address']
@@ -368,16 +369,9 @@ def main(arguments):
     bcc_address = config[environment]['bcc_address']
     subject=f'ingatlan.com szűrési eredmények {datetime.datetime.today().strftime("%Y-%m-%d %H óra")}'
     import traceback
-    if environment=='PROD':
-        outputfld=os.path.join('/var','opt','realestimator','output_prod')
-        logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',filename=os.path.join(outputfld,'ingatlan_com.log'), level=logging.INFO,datefmt='%Y-%m-%d %H:%M:%S')
-        db_file=os.path.join(outputfld,'BSV_PROD.db')
-   
-    elif environment=='UAT':
-        outputfld=os.path.join('/var','opt','realestimator','output_dev')
-        logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',filename=os.path.join(outputfld,'ingatlan_com_DEV.log'), level=logging.INFO,datefmt='%Y-%m-%d %H:%M:%S')
-        db_file=os.path.join(outputfld,'BSV_DEV.db')
-
+    outputfld=config[environment]['outputfld']
+    db_file=os.path.join(outputfld,rf'BSV_{environment}.db')
+    logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',filename=os.path.join(outputfld,rf'ingatlan_com_{environment}.log'), level=logging.INFO,datefmt='%Y-%m-%d %H:%M:%S')
     if startat==0:
         conn=create_connection(db_file)
         try:
