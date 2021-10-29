@@ -31,7 +31,7 @@ git clone git@github.com:JuhaszIstvan/BSV_realestimator.git
 1. Futtasd az anaconda prompton belül:
 ```
 cd C:\src\BSV_realestimator
-conda env create -f "C:\src\BSV_realestimator\scripts\bsv_realestimator.yml"
+conda env create -f "C:\src\BSV_realestimator\bsv_realestimator_env.yml"
 conda activate bsv_realestimator_env
 ```
 A virtual environmentet ellenőrizheted így: ```conda env list```
@@ -40,6 +40,7 @@ Hozd létre a lenti tartalommal a  params.ini filet a scripts könyvtárban. Ebb
 (PROD és a UAT environmentek között az -e PROD vagy -e UAT argumentummal lehet majd váltani.)
 ```
 [DEFAULT]
+
 [PROD]
 sender_address = a_jelentes_kuldo_email_cime@gmail.com
 sender_pass = a_jelentes_kuldo_gmail_API_kulcsa
