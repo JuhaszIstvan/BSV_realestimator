@@ -226,6 +226,7 @@ def collectads(starter, batchsize):
             x = requests.get(hirdetesurl, headers=headers)
             logging.debug(x.status_code)
             hData['httpcode'] = x.status_code
+            hData['Forward']=False
             if x.status_code==404:
                 dead=dead+1
             else:
@@ -304,8 +305,6 @@ def collectads(starter, batchsize):
             try:   
                 Df=ClearBatch(Df)
             except Exception as e:
-                logging.error(e.args)
-                print(e)
                 logging.error(f"Failed to convert the file {hData['ID']}")
         resultlist = resultlist.append(Df, ignore_index=False)
         if n==batchsize:
@@ -362,7 +361,6 @@ USAGE:          ingatlan_com.py
     config=configparser.ConfigParser()
     paramfile=os.path.join(os.path.dirname(os.path.realpath(__file__)),'params.ini')
     config.read(paramfile)
-    print(config.sections())
     sender_address = config[environment]['sender_address']
     sender_pass = config[environment]['sender_pass']
     receiver_address = config[environment]['receiver_address']
@@ -371,12 +369,16 @@ USAGE:          ingatlan_com.py
     import traceback
     outputfld=config[environment]['outputfld']
     db_file=os.path.join(outputfld,rf'BSV_{environment}.db')
-    logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',filename=os.path.join(outputfld,rf'ingatlan_com_{environment}.log'), level=logging.INFO,datefmt='%Y-%m-%d %H:%M:%S')
+    if not os.path.isfile(db_file):
+        logging.error(rf'The database file does not exist for this environment: {environment}. Please fill the {paramfile} and run the setup file: {os.path.join(os.path.dirname(os.path.realpath(__file__)),"setup.py")}')
+        sys.exit(2)
+    logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',filename=os.path.join(outputfld,rf'ingatlan_com_{environment}.log'), level=logging.DEBUG,datefmt='%Y-%m-%d %H:%M:%S')
     if startat==0:
         conn=create_connection(db_file)
         try:
             startat=get_scalar_result(conn,"SELECT MAX(ID) from hirdetesek where httpcode!=404;") + 1  
             conn.close() 
+            print('startat')
         except:
             logging.error(f"Failed to retrieve the last valid hirdetes! from the database!")
             sys.exit(2)
@@ -385,6 +387,8 @@ USAGE:          ingatlan_com.py
     print(f'Starting {environment},{startat}')
     resultlist=collectads(int(startat),batchsize)
     #db upload
+    logging.info('The results had been collected')
+
     conn=create_connection(db_file)
     nohir=get_scalar_result(conn,"SELECT COUNT (*) from hirdetesek;")
     logging.info(f'Number of entries in hirdetesek {nohir}')
@@ -396,14 +400,16 @@ USAGE:          ingatlan_com.py
         logging.error('Failed to DROP the TEMP table')
     try:
         create_table(conn,sql_create_temp)
+        logging.debug('Created the TEMP table')
         conn.commit()
     except:
         logging.error('failed to recreate the temp table')
     try:
         resultlist.to_sql('TEMP', conn, if_exists='append')
+        logging.debug('Uploaded the dataframe to the starging table')
         conn.commit() 
     except Exception:
-        logging.error(f'Failed to upload onto the staging DB')
+        logging.error(f'Failed to upload the datafrane to the staging table')
         logging.error(traceback.format_exc())
         pass
     try:
@@ -411,9 +417,10 @@ USAGE:          ingatlan_com.py
         conn.commit() 
         hirafter=get_scalar_result(conn,"SELECT COUNT(*) from hirdetesek;")
         hirmaxafter= get_scalar_result(conn,"SELECT MAX(ID) from hirdetesek where httpcode!=404;")
+        logging.error(rf'The number of stored hirdetesk went from {nohir} to {hirafter}')
         conn.close          
     except:
-        logging.info(f'failed to execute the DB operations!')
+        logging.ERROR(f'Failed to execute the DB operations!')
         pass        
     lastHID=resultlist[resultlist.httpcode!=404].index.max()
     filestring=os.path.join(outputfld,"ingatlan-dot-com_" + str(startat)+ '_' + str(lastHID)+ '_' + datetime.datetime.today().strftime("%Y-%m-%d-%H-%M-%S") + '.xlsx')

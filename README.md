@@ -62,14 +62,14 @@ A configuráció után futtasd le  a következő parancsokat akár powershellben
 
 ```
 conda activate bsv_realestimator_env
-python C:\Users\eee\Dropbox\BSV_realestimator\scripts\setup.py
+python C:\src\BSV_realestimator\scripts\setup.py
 ```
 
 ## FUTTATÁS
 Vagy Anaconda prompton vagy powershellenben:
 ```
 conda activate bsv_realestimator_env
-python C:\Users\eee\Dropbox\BSV_realestimator\scripts\ingatlan_com.py -b 15 -s 0 -e UAT
+python C:\src\BSV_realestimator\scripts\ingatlan_com.py -b 15 -s 0 -e UAT
 ```
 
 
