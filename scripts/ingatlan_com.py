@@ -1,4 +1,5 @@
-import logging 
+import logging
+import json
 sql_create_hirdetesek = """ CREATE TABLE IF NOT EXISTS hirdetesek (
                                     ID integer PRIMARY KEY NOT NULL,
                                     hirdetesurl text NOT NULL,
@@ -183,7 +184,7 @@ def ClearBatch(rsl):
 #    rsl=rsl.drop(['millio','arcleared'], axis=1)
     rsl['Forward'] =False
     #rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['irany'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['kategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True))  , 'Forward']=True
-    rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|.*Érd.*|.*Törökbálint.*|.*Biatorbágy.*|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['irany'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['kategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True)), 'Forward']=True
+    rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['city'].str.contains('kerület|Érd|Törökbálint|Biatorbágy|Budapest|Budaörs', case=False, regex=True)) & (rsl['irany'].str.contains('Eladó|sale', case=False, regex=True)) & (rsl['kategoria'].str.contains('Ház|house|flat|Lakás|üzlet|shop|telek|plot', case=False, regex=True)), 'Forward']=True
     return rsl
 
 def collectads(starter, batchsize):
@@ -196,6 +197,9 @@ def collectads(starter, batchsize):
     import numpy as np
     import requests
     from tqdm import tqdm
+    import html
+    import json
+    from bs4 import BeautifulSoup
     import traceback
     resultlist = pd.DataFrame()
     dead=0
@@ -226,26 +230,56 @@ def collectads(starter, batchsize):
             x = requests.get(hirdetesurl, headers=headers)
             logging.debug(x.status_code)
             hData['httpcode'] = x.status_code
-            hData['Forward']=False
-            if x.status_code==404:
-                dead=dead+1
+            hData['Forward'] = False
+            if x.status_code == 404:
+                dead = dead+1
             else:
-                dead=0
-            if dead>maxdead:
+                dead = 0
+            if dead > maxdead:
                 logging.info("Too many consecutive broken links. Stopping.")
                 break
-            if x.status_code==200:
-                datasheet=None
-                hWebPageText=x.content.decode()
-                wb=hWebPageText.replace("\n","")
-                m=None
-                m=re.search(r"(?:window\['dataLayer'\]=\[)({[^}]*})", wb)
+            if x.status_code == 200:
+                hData['First_recorded']=datetime.date.today().strftime("%Y-%m-%d")
+                datasheet = None
+                #hWebPageText=x.content.decode()
+                soup = BeautifulSoup(x.text, "html.parser")
+                data_listing = json.loads(soup.find('div', {"class": 'd-none', "data-listing": True}).attrs['data-listing'])
+                hData['irany'] = data_listing['type']
+                hData['kategoria']=data_listing['property']['type']
+                hData['alapterulet']=data_listing['property']['areaSize']
+                hData['leiras']=data_listing['description']
+
+                data_seller = json.loads(soup.find('div', {"class": 'd-none', "data-seller": True}).attrs['data-seller'])
+                data_location_hierarchy = json.loads(soup.find('div', {"class": 'd-none', "data-location-hierarchy": True}).attrs['data-location-hierarchy'])
+                for location in data_location_hierarchy['locations']:
+                    if location['type'] == 'city':
+                        hData['city']=location['name']
+                    if location['type'] == 'street':
+                        hData['street']=rf'{location["name"]} {location["namePostfix"]}'
+                    if location['type'] == 'district':
+                        hData['kerulet']=location["name"]
+                if "name" in data_seller:
+                    hData['hirdeto'] = data_seller['name']
+                if "office" in data_seller:
+                    if  "name" in data_seller['office']:
+                        hData['iroda'] = data_seller['office']['name']
+                    if "id" in data_seller['office']['id']:
+                        hData['officeid'] = data_seller['office']['id']
+                hData['ar'] = data_listing['prices'][0]['amount']
+                #wb = hWebPageText.replace("\n","")
+                wb = html.unescape(x.content.decode())
+                m = None
+                #m = re.search(r"(?:window\['dataLayer'\]=\[)({[^}]*})", wb)
+                #m = re.search(r'(?:<div id="listing" class="d-none" )(data-listing=[\S\s]+?)></div>', wb)
+
                 if m is not None:
+                    #rawdog = m.group(1)
+                    firstcontent = re.search('"([\S\s]*)"', rawdog).group(1)
                     datasheet=m.group(1).strip()
  #                   print(datasheet)
  #                   print(type(datasheet))
                     if datasheet is not None:
-                        import json
+
                         js=json.loads(datasheet)
                         hData['irany']=js.get('listingType', None)
                         hData['hirdeto']=js.get('referentName', None)
@@ -259,8 +293,8 @@ def collectads(starter, batchsize):
                         hData['owner']=js.get('owner', None) 
                         hData['iroda']=js.get('officename', None) 
 
-                hData['First_recorded']=datetime.date.today().strftime("%Y-%m-%d")
-                m= re.search(r'<h1 class="address"[^>]*>(.*?)</h1>', wb)
+
+                m = re.search(r'<h1 class="address"[^>]*>(.*?)</h1>', wb)
                 #m = re.search(r'<h1 class="address".*>?(.*?)</h1>', hWebPageText)
                 if m is not None:
                     hData['address'] = m.group(1).strip()
@@ -268,27 +302,26 @@ def collectads(starter, batchsize):
  #               m = re.search('<span class="parameter-value">(.*?)m²</span>', hWebPageText)
 #                if m is not None:
 #                    hData['alapterulet'] = int(m.group(1).strip().replace(" ", ""))
-                m = re.search(r'(.*?),(.*)', hData["address"])
-                if m is not None:
-                    hData['kerulet'] = m.group(1).strip()
-                m = re.search('<div class="long-description">(.*?)</div>', hWebPageText)
-                hData['leiras']=''
-                if m is not None:
-                    hData['leiras'] = m.group(1).strip()
-                m = re.search('<td>Belmagasság</td> <td>(.*?)</td> </tr>', hWebPageText)        
-                if m is not None:
-                    hData['belmagassag'] = m.group(1).strip()
-                m = re.search('<div class="listing-subtype">(.*?)</div>', hWebPageText)
- #               if m is not None:
- #                   hData['alkategoria'] = m.group(1).strip()
- #               m = re.search('<div class="call-the-advertiser">(.*?)</div>', hWebPageText)         
- #               if m is not None:
- #                   hData['hirdeto'] = m.group(1).strip()
-                m= None
-                m=re.search(r'div class="officeName"[^>]*?>(.*?)</div>', wb)
-                #m = re.search(r'(?:<div class="officeName".*>)(.*)</div>', wb)
-                if m is not None:
-                    hData['iroda'] = m.group(1).strip()
+                    m = re.search(r'(.*?),(.*)', hData["address"])
+                    if m is not None:
+                        hData['kerulet'] = m.group(1).strip()
+               # m = re.search('<div class="long-description">(.*?)</div>', hWebPageText)
+               # if m is not None:
+               #     hData['leiras'] = m.group(1).strip()
+               # m = re.search('<td>Belmagasság</td> <td>(.*?)</td> </tr>', hWebPageText)
+               # if m is not None:
+               #     hData['belmagassag'] = m.group(1).strip()
+               # m = re.search('<div class="listing-subtype">(.*?)</div>', hWebPageText)
+ #             #  if m is not None:
+ #             #      hData['alkategoria'] = m.group(1).strip()
+ #             #  m = re.search('<div class="call-the-advertiser">(.*?)</div>', hWebPageText)
+ #             #  if m is not None:
+ #             #      hData['hirdeto'] = m.group(1).strip()
+               # m= None
+               # m=re.search(r'div class="officeName"[^>]*?>(.*?)</div>', wb)
+               # #m = re.search(r'(?:<div class="officeName".*>)(.*)</div>', wb)
+               # if m is not None:
+            #    hData['iroda'] = m.group(1).strip()
 #                m= None
 #                m = re.search('<div class="parameter parameter-price">.*<span class="parameter-value">(.*?)</span>', hWebPageText)
 #                if m is not None:
