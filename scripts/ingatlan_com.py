@@ -207,11 +207,20 @@ def collectads(starter, batchsize):
     baseurl='https://ingatlan.com'
  
     for n in tqdm(range(batchsize)):
-        time.sleep(np.exp(random.random())/2)
+        time.sleep(np.exp(random.random()))
         hID=starter+n
         hirdetesurl=str(baseurl)+"/"+str(hID)
         logging.debug(hirdetesurl)
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:85.0) Gecko/20100101 Firefox/85.0'}
+
+        headers = {'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:104.0) Gecko/20100101 Firefox/104.0',
+                   'Accept' : 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,hu;q=0.7,en;q=0.3,',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://ingatlan.com/'
+        }
+
+
+        #headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36'}
         hData = {"ID": int(hID),
                 "hirdetesurl": hirdetesurl,
                 'First_recorded':NaN,
@@ -263,7 +272,7 @@ def collectads(starter, batchsize):
                 if "office" in data_seller:
                     if  "name" in data_seller['office']:
                         hData['iroda'] = data_seller['office']['name']
-                    if "id" in data_seller['office']['id']:
+                    if "id" in data_seller['office']:
                         hData['officeid'] = data_seller['office']['id']
                 hData['ar'] = data_listing['prices'][0]['amount']
                 #wb = hWebPageText.replace("\n","")
