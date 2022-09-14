@@ -207,7 +207,7 @@ def collectads(starter, batchsize):
     baseurl='https://ingatlan.com'
  
     for n in tqdm(range(batchsize)):
-        time.sleep(np.exp(random.random()))
+        time.sleep(np.exp(random.random()*2))
         hID=starter+n
         hirdetesurl=str(baseurl)+"/"+str(hID)
         logging.debug(hirdetesurl)
