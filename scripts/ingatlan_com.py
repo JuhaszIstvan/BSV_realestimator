@@ -83,7 +83,7 @@ SELECT
     Forward,
     end_date
 from TEMP
-WHERE NOT EXISTS (SELECT ID FROM hirdetesek WHERE hirdetesek.ID = TEMP.ID) and TEMP.httpcode!=404;  """
+WHERE NOT EXISTS (SELECT ID FROM hirdetesek WHERE hirdetesek.ID = TEMP.ID) and TEMP.httpcode NOT IN (404,403);  """
 
 def create_connection(db_file):
     import sqlite3
@@ -184,7 +184,7 @@ def ClearBatch(rsl):
 #    rsl=rsl.drop(['millio','arcleared'], axis=1)
     rsl['Forward'] =False
     #rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['kerulet'].str.contains('.*kerület|Budapest|Budaörs.*', case=False, regex=True)) & (rsl['irany'].str.contains('.*Eladó.*', case=False, regex=True)) & (rsl['kategoria'].str.contains('.*Ház|Lakás|üzlet|telek.*', case=False, regex=True))  , 'Forward']=True
-    rsl.loc[(rsl.httpcode==200) & (pd.isnull(rsl['iroda'])) & (rsl['city'].str.contains('kerület|Érd|Törökbálint|Biatorbágy|Budapest|Budaörs', case=False, regex=True)) & (rsl['irany'].str.contains('Eladó|sale', case=False, regex=True)) & (rsl['kategoria'].str.contains('Ház|house|flat|Lakás|üzlet|shop|telek|plot', case=False, regex=True)), 'Forward']=True
+    rsl.loc[(rsl.httpcode == 200) & (pd.isnull(rsl['iroda'])) & (rsl['city'].str.contains('kerület|Érd|Törökbálint|Biatorbágy|Budapest|Budaörs', case=False, regex=True)) & (rsl['irany'].str.contains('Eladó|sale', case=False, regex=True)) & (rsl['kategoria'].str.contains('Ház|house|flat|Lakás|üzlet|shop|telek|plot', case=False, regex=True)), 'Forward']=True
     return rsl
 
 def collectads(starter, batchsize):
@@ -240,7 +240,7 @@ def collectads(starter, batchsize):
             logging.debug(x.status_code)
             hData['httpcode'] = x.status_code
             hData['Forward'] = False
-            if x.status_code == 404:
+            if x.status_code in [404, 403]:
                 dead = dead+1
             else:
                 dead = 0
@@ -282,8 +282,6 @@ def collectads(starter, batchsize):
                 #m = re.search(r'(?:<div id="listing" class="d-none" )(data-listing=[\S\s]+?)></div>', wb)
 
                 if m is not None:
-                    #rawdog = m.group(1)
-                    firstcontent = re.search('"([\S\s]*)"', rawdog).group(1)
                     datasheet=m.group(1).strip()
  #                   print(datasheet)
  #                   print(type(datasheet))
@@ -418,7 +416,7 @@ USAGE:          ingatlan_com.py
     if startat==0:
         conn=create_connection(db_file)
         try:
-            startat=get_scalar_result(conn,"SELECT MAX(ID) from hirdetesek where httpcode!=404;") + 1  
+            startat=get_scalar_result(conn,"SELECT MAX(ID) from hirdetesek where httpcode NOT IN (404,403);") + 1
             conn.close() 
             print('startat')
         except:
@@ -458,13 +456,13 @@ USAGE:          ingatlan_com.py
         run_command(conn,addnewsql)
         conn.commit() 
         hirafter=get_scalar_result(conn,"SELECT COUNT(*) from hirdetesek;")
-        hirmaxafter= get_scalar_result(conn,"SELECT MAX(ID) from hirdetesek where httpcode!=404;")
+        hirmaxafter= get_scalar_result(conn,"SELECT MAX(ID) from hirdetesek where httpcode NOT IN (404,403);")
         logging.error(rf'The number of stored hirdetesk went from {nohir} to {hirafter}')
         conn.close          
     except:
         logging.ERROR(f'Failed to execute the DB operations!')
         pass        
-    lastHID=resultlist[resultlist.httpcode!=404].index.max()
+    lastHID=resultlist[resultlist.httpcode.isin([403,404])].index.max()
     filestring=os.path.join(outputfld,"ingatlan-dot-com_" + str(startat)+ '_' + str(lastHID)+ '_' + datetime.datetime.today().strftime("%Y-%m-%d-%H-%M-%S") + '.xlsx')
     resultlist.to_excel(filestring, engine='xlsxwriter',index=True)
     filestring=os.path.join(outputfld,"ingatlan-dot-com_" + datetime.datetime.today().strftime("%Y-%m-%d-%H")  + '_' + str(startat)+ '-' + str(lastHID)+ '.xlsx')
